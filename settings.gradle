@@ -1,2 +1,2 @@
-include ':app'
+include ':app', ':frouter:frouter_compiler', ':frouter:frouter_annotation', ':frouter:frouter_api'
 rootProject.name='FRouter'
