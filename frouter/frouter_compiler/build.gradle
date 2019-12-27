@@ -1,0 +1,32 @@
+apply plugin: 'java-library'
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+
+    /**
+     * 注册注解，并对其生成 META-INF 的配置信息
+     */
+    compileOnly 'com.google.auto.service:auto-service:1.0-rc4'
+    annotationProcessor 'com.google.auto.service:auto-service:1.0-rc4'
+
+    /**
+     * 使用javapoet，通过类调用的方式生成java代码
+     */
+    implementation 'com.squareup:javapoet:1.9.0'
+
+    // 引入annotation，处理@FRouter注解
+    implementation project(':frouter:frouter_annotation')
+}
+
+/**
+ * 解决java控制台中文乱码问题
+ */
+tasks.withType(JavaCompile){
+    options.encoding = 'UTF-8'
+}
+
+/**
+ * JDK编译版本
+ */
+sourceCompatibility = "7"
+targetCompatibility = "7"
