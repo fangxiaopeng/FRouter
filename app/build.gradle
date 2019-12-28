@@ -40,4 +40,6 @@ dependencies {
 
     implementation project(':frouter:frouter_annotation')
     annotationProcessor project(':frouter:frouter_compiler')
+
+    api project(':frouter:frouter_api')
 }
