@@ -16,8 +16,6 @@ dependencies {
 
     // 引入annotation，处理@FRouter注解
     implementation project(':frouter:frouter_annotation')
-
-    implementation project(':frouter:frouter_api')
 }
 
 /**
