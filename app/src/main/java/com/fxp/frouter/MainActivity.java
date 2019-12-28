@@ -4,6 +4,9 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.os.Bundle;
 
+import com.fxp.frouter.annotation.FRouter;
+
+@FRouter(group = "app", path = "/app/MainActivity")
 public class MainActivity extends AppCompatActivity {
 
     @Override
