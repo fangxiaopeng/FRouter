@@ -2,6 +2,18 @@ apply plugin: 'java-library'
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
+
+    /**
+     * 引入 frouter_annotation，因为 Element 在 javax.lang 包下
+     */
+    implementation project(':frouter:frouter_annotation')
+}
+
+/**
+ * 解决java控制台中文乱码问题
+ */
+tasks.withType(JavaCompile){
+    options.encoding = 'UTF-8'
 }
 
 sourceCompatibility = "7"
