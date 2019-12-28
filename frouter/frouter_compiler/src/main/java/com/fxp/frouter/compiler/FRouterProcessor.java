@@ -11,8 +11,11 @@ import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
+import com.squareup.javapoet.WildcardTypeName;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -36,6 +39,7 @@ import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
+import javax.tools.JavaFileObject;
 
 /**
  * Title:       FRouterProcessor
@@ -104,9 +108,14 @@ public class FRouterProcessor extends AbstractProcessor {
     private String pkgNameForAPT;
 
     /**
-     * 临时存储路由信息
+     * 临时存储路由 Group 中 Path 类对象,生成 Path 类文件时遍历
      */
-    private Map<String, List<RouterBean>> tempRouterMap = new HashMap<>();
+    private Map<String, List<RouterBean>> tempPathMap = new HashMap<>();
+
+    /**
+     * 临时存储路由 Group 类对象,生成 Group 类文件时遍历
+     */
+    private Map<String, String> tempGroupMap = new HashMap<>();
 
     @Override
     public synchronized void init(ProcessingEnvironment processingEnvironment) {
@@ -145,14 +154,6 @@ public class FRouterProcessor extends AbstractProcessor {
         Set<? extends Element> elements = roundEnvironment.getElementsAnnotatedWith(FRouter.class);
         // 遍历所有的节点
         for (Element element : elements){
-            // 通过 elementsUtils 获取Activity类型
-            TypeElement typeElement = elementsUtils.getTypeElement(Constants.ACTIVITY);
-            TypeMirror activityMirror = typeElement.asType();
-
-            // 获取类信息
-            TypeMirror elementTypeMirror = element.asType();
-            messager.printMessage(Diagnostic.Kind.NOTE, "遍历的节点信息：" + (elementTypeMirror != null ? elementTypeMirror.toString() : ""));
-
             // 获取到包节点
             String packageName = elementsUtils.getPackageOf(element).getQualifiedName().toString();
 
@@ -163,99 +164,39 @@ public class FRouterProcessor extends AbstractProcessor {
 
             messager.printMessage(Diagnostic.Kind.NOTE, "FRouter：\n 包名：" + packageName + "\n 原类名：" + className + "\n 新生成文件类名：" + finalClassName);
 
-            // 获取FRouter注解的path值
+            // 获取FRouter注解，为了拿到 group、path 值
             FRouter fRouter = element.getAnnotation(FRouter.class);
 
+            // 封装 RouterBean 对象
             RouterBean routerBean = new RouterBean.Builder().setElement(element).setGroup(fRouter.group()).setPath(fRouter.path()).build();
+
+            // 通过 elementsUtils 获取 Activity 类节点信息
+            TypeMirror activityMirror = elementsUtils.getTypeElement(Constants.ACTIVITY).asType();
+            // 获取当前节点类信息
+            TypeMirror elementTypeMirror = element.asType();
+            messager.printMessage(Diagnostic.Kind.NOTE, "当前类节点信息：" + (elementTypeMirror != null ? elementTypeMirror.toString() : ""));
+
+            // 判断当前被注解的类是否为 Activity
             if (typesUtils.isSubtype(elementTypeMirror, activityMirror)){
                 routerBean.setType(RouterBean.Type.ACTIVITY);
             } else {
                 throw new RuntimeException("FRouter 只能用来注解 Activity");
             }
 
-            TypeElement groupLoadType = elementsUtils.getTypeElement(Constants.FROUTER_GROUP);
-            TypeElement pathLoadType = elementsUtils.getTypeElement(Constants.FROUTER_PATH);
-
             valueTempRouterMap(routerBean);
 
-            // 1，生成路由的Path类文件，如 FRouter$$Path$$app
             try {
+                TypeElement groupLoadType = elementsUtils.getTypeElement(Constants.FROUTER_GROUP);
+                TypeElement pathLoadType = elementsUtils.getTypeElement(Constants.FROUTER_PATH);
+
+                // 1，生成路由的Path类文件，如 FRouter$$Path$$app
                 createPathFile(pathLoadType);
+
+                // 2，生成路由的Group类文件， 如 FRouter$$Group$$app。须先生成 Path 类文件
+                createGroupFile(groupLoadType, pathLoadType);
             } catch (IOException e) {
                 e.printStackTrace();
             }
-
-            // 2，生成路由的Group类文件， 如 FRouter$$Group$$app。须先生成 Path 类文件
-
-            /**
-             * 生成类文件
-             * 下面提供两种方式：javapoet、原生
-             *
-             * package com.fxp.frouter;
-             * public class MainActivity$$FRouter {
-             *
-             *     public static Class<?> findTargetClass(String path){
-             *         if (path.equalsIgnoreCase("/app/MainActivity")){
-             *             return MainActivity.class;
-             *         }
-             *
-             *         return null;
-             *     }
-             * }
-             */
-
-            /**
-             * JavaPoet
-             *
-             * 8个常用类
-             * * MethodSpec     用来声明构造函数或方法
-             * * TypeSpec       用来声明类、接口、枚举
-             * * FieldSpec      用来声明成员变量、字段
-             * * JavaFile       顶级类的Java文件
-             * * ParameterSpec  用来创建参数
-             * * AnnotationSpec 用来创建注解
-             * * ClassName      用来包装一个类
-             * * TypeName       类型，如方法返回值类型TypeName.VOID
-             *
-             * 字符串格式化规则
-             * * $L     字面量，如 "int value = $L", 10
-             * * $S     字符串，如 $S, "abc"
-             * * $T     类、接口，如 $T, MainActivity
-             * * $N     变量，如 $N, user.$N, name
-             *
-             */
-            try {
-                MethodSpec methodSpec = MethodSpec.methodBuilder("findTargetClass")
-                        .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-                        .returns(Class.class)
-                        .addParameter(String.class, "path")
-                        .addStatement("return path.equals($S) ? $T.class : null", fRouter.path(), ClassName.get((TypeElement)element))
-                        .build();
-
-                TypeSpec typeSpec = TypeSpec.classBuilder(finalClassName)
-                        .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-                        .addMethod(methodSpec)
-                        .build();
-
-                JavaFile javaFile = JavaFile.builder(packageName, typeSpec).build();
-                javaFile.writeTo(filer);
-            } catch (IOException e){
-                e.printStackTrace();
-            }
-
-/*            try {
-                JavaFileObject javaFileObject = filer.createClassFile(packageName + "." + finalClassName);
-                Writer writer = new BufferedWriter(javaFileObject.openWriter());
-                writer.write("package " + packageName + ";\n");
-                writer.write("public class " + finalClassName + " {\n");
-                writer.write("public static Class<?> findTargetClass(String path){\n");
-                writer.write("return path.equalsIgnoreCase(\"" + fRouter.path() + "\") ? " + className + ".class : null;\n");
-                writer.write("}\n");
-                writer.write("}");
-                writer.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }*/
         }
 
         return false;
@@ -263,7 +204,97 @@ public class FRouterProcessor extends AbstractProcessor {
 
 
     /**
+     * @Description: 创建类文件示例
+     *
+     * 使用两种方式：javapoet、原生，生成如下类文件
+     *
+     * package com.fxp.frouter;
+     * public class MainActivity$$FRouter {
+     *     public static Class<?> findTargetClass(String path){
+     *         return path.equalsIgnoreCase("/app/MainActivity") ? MainActivity.class : null;
+     *     }
+     * }
+     *
+     * @Author:  fxp
+     * @Date:    2019-12-27   12:33
+     * @param    element
+     * @return   void
+     * @exception/throws
+     */
+    private void createFileExample(Element element) throws IOException {
+        FRouter fRouter = element.getAnnotation(FRouter.class);
+        // 获取到包节点
+        String packageName = elementsUtils.getPackageOf(element).getQualifiedName().toString();
+        String className = element.getSimpleName().toString();
+        // 最终生成的类文件名，原类名 + "$$FRouter"
+        String finalClassName = className + "$$FRouter";
+
+        /**
+         * JavaPoet
+         *
+         * 8个常用类
+         * * MethodSpec     用来声明构造函数或方法
+         * * TypeSpec       用来声明类、接口、枚举
+         * * FieldSpec      用来声明成员变量、字段
+         * * JavaFile       顶级类的Java文件
+         * * ParameterSpec  用来创建参数
+         * * AnnotationSpec 用来创建注解
+         * * ClassName      用来包装一个类
+         * * TypeName       类型，如方法返回值类型TypeName.VOID
+         *
+         * 字符串格式化规则
+         * * $L     字面量，如 "int value = $L", 10
+         * * $S     字符串，如 $S, "abc"
+         * * $T     类、接口，如 $T, MainActivity
+         * * $N     变量，如 $N, user.$N, name
+         */
+
+        // 声明方法
+        MethodSpec methodSpec = MethodSpec.methodBuilder("findTargetClass")
+                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
+                .returns(Class.class)
+                .addParameter(String.class, "path")
+                .addStatement("return path.equals($S) ? $T.class : null", fRouter.path(), ClassName.get((TypeElement)element))
+                .build();
+
+        // 声明类，并将方法添加到类
+        TypeSpec typeSpec = TypeSpec.classBuilder(finalClassName)
+                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
+                .addMethod(methodSpec)
+                .build();
+
+        // 构建类文件，将类添加到指定包名下
+        JavaFile javaFile = JavaFile.builder(packageName, typeSpec).build();
+
+        // 写文件
+        javaFile.writeTo(filer);
+
+        /**
+         * 原生
+         */
+        JavaFileObject javaFileObject = filer.createClassFile(packageName + "." + finalClassName);
+        Writer writer = new BufferedWriter(javaFileObject.openWriter());
+        writer.write("package " + packageName + ";\n");
+        writer.write("public class " + finalClassName + " {\n");
+        writer.write("public static Class<?> findTargetClass(String path){\n");
+        writer.write("return path.equalsIgnoreCase(\"" + fRouter.path() + "\") ? " + className + ".class : null;\n");
+        writer.write("}\n");
+        writer.write("}");
+        writer.close();
+    }
+
+
+    /**
      * @Description:    生成 Path 类文件
+     *
+     * public class FRouter$$Path$$app implements FRouterLoadPath {
+     *   @Override
+     *   public Map<String, RouterBean> loadPath() {
+     *     Map<String, RouterBean> pathMap = new HashMap<>();
+     *     pathMap.put("/app/MainActivity", RouterBean.create(RouterBean.Type.ACTIVITY, MainActivity.class, "/app/MainActivity", "app"));
+     *     return pathMap;
+     *   }
+     * }
      *
      * @Author:  fxp
      * @Date:    2019-12-27   20:06
@@ -272,7 +303,7 @@ public class FRouterProcessor extends AbstractProcessor {
      * @exception/throws
      */
     private void createPathFile(TypeElement pathLoadType) throws IOException {
-        if (EmptyUtils.isEmpty(tempRouterMap)) return;
+        if (EmptyUtils.isEmpty(tempPathMap)) return;
 
         /**
          * 方法的返回值，Map<String, RouterBean>
@@ -284,9 +315,9 @@ public class FRouterProcessor extends AbstractProcessor {
         );
 
         /**
-         * 遍历 tempRouterMap，为每个分组都创建一个 Path 类文件
+         * 遍历 tempPathMap，为每个分组都创建一个 Path 类文件
          */
-        for (Map.Entry<String, List<RouterBean>> entry : tempRouterMap.entrySet()){
+        for (Map.Entry<String, List<RouterBean>> entry : tempPathMap.entrySet()){
             /**
              * public Map<String, RouterBean> loadPath(){}
              */
@@ -306,11 +337,12 @@ public class FRouterProcessor extends AbstractProcessor {
 
             /**
              * 循环，将所有 RouterBean put 到 pathMap
+             * pathMap.put("/app/MainActivity", RouterBean.create(RouterBean.Type.ACTIVITY, MainActivity.class, "/app/MainActivity", "app"));
              */
             List<RouterBean> pathList = entry.getValue();
             for (RouterBean bean : pathList){
                 methodBuilder.addStatement(
-                        "$N.put($S, $T.create($T, $L, $T.class, $S, $S))",
+                        "$N.put($S, $T.create($T.$L, $T.class, $S, $S))",
                         Constants.PATH_PARAMETER_NAME,           // pathMap
                         bean.getPath(),                               // "/app/MainActivity"
                         ClassName.get(RouterBean.class),
@@ -334,11 +366,86 @@ public class FRouterProcessor extends AbstractProcessor {
                     .build())
                     .build().writeTo(filer);
 
+            tempGroupMap.put(entry.getKey(), finalClassName);
         }
     }
 
     /**
-     * @Description: 赋值 tempRouterMap
+     * @Description: 生成 Group 类文件
+     *
+     * public class FRouter$$Group$$app implements FRouterLoadGroup {
+     *   @Override
+     *   public Map<String, Class<? extends FRouterLoadPath>> loadGroup() {
+     *     Map<String, Class<? extends FRouterLoadPath>> groupMap = new HashMap<>();
+     *     groupMap.put("app", FRouter$$Path$$app.class);
+     *     return groupMap;
+     *   }
+     * }
+     *
+     * @Author:  fxp
+     * @Date:    2019-12-28   12:21
+     * @param    groupLoadType
+     * @param    pathLoadType
+     * @return   void
+     * @exception/throws
+     */
+    private void createGroupFile(TypeElement groupLoadType, TypeElement pathLoadType) throws IOException {
+        if (EmptyUtils.isEmpty(tempGroupMap) || EmptyUtils.isEmpty(tempPathMap)) return;
+
+        /**
+         * 方法的返回值，Map<String, Class<? extends FRouterLoadPath>>
+         * 第二个参数 Class<? extends FRouterLoadPath> 为 FRouterLoadPath 接口的实现类
+         */
+        TypeName methodReturn = ParameterizedTypeName.get(
+                ClassName.get(Map.class),
+                ClassName.get(String.class),
+                ParameterizedTypeName.get(ClassName.get(Class.class), WildcardTypeName.subtypeOf(ClassName.get(pathLoadType)))
+        );
+
+        /**
+         * public Map<String, Class<? extends FRouterLoadPath>> loadGroup(){}
+         */
+        MethodSpec.Builder methodBuilder = MethodSpec.methodBuilder(Constants.GROUP_METHOD_NAME)
+                .addAnnotation(Override.class)      // 实现FRouterLoadPath接口，重新loadGroup方法
+                .addModifiers(Modifier.PUBLIC)
+                .returns(methodReturn);
+
+        /**
+         * Map<String, String> groupMap = new HashMap<>();
+         */
+        methodBuilder.addStatement("$T<$T, $T> $N = new $T<>()",
+                ClassName.get(Map.class),
+                ClassName.get(String.class),
+                ParameterizedTypeName.get(ClassName.get(Class.class), WildcardTypeName.subtypeOf(ClassName.get(pathLoadType))),
+                Constants.GROUP_PARAMETER_NAME,
+                ClassName.get(HashMap.class));
+
+        for (Map.Entry<String, String> entry : tempGroupMap.entrySet()){
+            /**
+             * groupMap.put("app", FRouter$$Path$$app.class);
+             */
+            methodBuilder.addStatement("$N.put($S, $T.class)",
+                    Constants.GROUP_PARAMETER_NAME,
+                    entry.getKey(),
+                    ClassName.get(pkgNameForAPT, entry.getValue()));    // 指定包名下类文件
+        }
+
+        methodBuilder.addStatement("return $N", Constants.GROUP_PARAMETER_NAME);
+
+        String finalClassName = Constants.GROUP_FILE_NAME + moduleName;
+
+        JavaFile.builder(pkgNameForAPT,
+                TypeSpec.classBuilder(finalClassName)
+                        .addSuperinterface(ClassName.get(groupLoadType))
+                        .addModifiers(Modifier.PUBLIC)
+                        .addMethod(methodBuilder.build())
+                        .build())
+                .build()            // 完成java类构建
+                .writeTo(filer);    // 文件生成器生成类文件
+    }
+
+    /**
+     * @Description: 赋值 tempPathMap
      *
      * @Author:  fxp
      * @Date:    2019-12-27   19:18
@@ -347,12 +454,12 @@ public class FRouterProcessor extends AbstractProcessor {
      * @exception/throws
      */
     private void valueTempRouterMap(RouterBean bean){
-        if (checkRouterBean(bean)){
-            List<RouterBean> routerBeans = tempRouterMap.get(bean.getGroup());
+        if (checkRouterPath(bean)){
+            List<RouterBean> routerBeans = tempPathMap.get(bean.getGroup());
             if (EmptyUtils.isEmpty(routerBeans)){
                 routerBeans = new ArrayList<>();
                 routerBeans.add(bean);
-                tempRouterMap.put(bean.getGroup(), routerBeans);
+                tempPathMap.put(bean.getGroup(), routerBeans);
             } else {
                 for (RouterBean routerBean : routerBeans){
                     if (!routerBean.getPath().equalsIgnoreCase(bean.getGroup())){
@@ -367,7 +474,7 @@ public class FRouterProcessor extends AbstractProcessor {
 
 
     /**
-     * @Description: 检查RouterBean合法性
+     * @Description: 检查RouterBean path 合法性
      *
      * 借鉴阿里ARouter路由规范
      * group 规范格式：须与module名称一致
@@ -379,7 +486,7 @@ public class FRouterProcessor extends AbstractProcessor {
      * @return   boolean
      * @exception/throws
      */
-    private boolean checkRouterBean(RouterBean routerBean){
+    private boolean checkRouterPath(RouterBean routerBean){
         if (routerBean == null) return false;
         String group = routerBean.getGroup(), path = routerBean.getPath();
 
