@@ -10,7 +10,18 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        /**
+         * 在gradle中配置选项参数值（用于apt传参接收）
+         * 注意：必须写在 defaultConfig 节点下
+         */
+        javaCompileOptions {
+            annotationProcessorOptions{
+                arguments = [test : "hello apt", muduleName : project.getName(), pkgNameForAPT : "com.fxp.frouter.apt"]
+            }
+        }
     }
+
     buildTypes {
         release {
             minifyEnabled false
@@ -26,4 +37,7 @@ dependencies {
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'androidx.test:runner:1.1.1'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.1.1'
+
+    implementation project(':frouter:frouter_annotation')
+    annotationProcessor project(':frouter:frouter_compiler')
 }
