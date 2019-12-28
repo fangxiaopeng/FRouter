@@ -63,11 +63,6 @@ public class Constants {
     public static final String FROUTER_PATH = MODULE_API_PACKAGE + ".core.FRouterLoadPath";
 
     /**
-     * 路由 Group 加载 方法名
-     */
-    public static final String GROUP_METHOD_NAME = "loadGroup";
-
-    /**
      * 路由 Group 中 Path 加载 方法名
      */
     public static final String PATH_METHOD_NAME = "loadPath";
@@ -81,5 +76,20 @@ public class Constants {
      * 路由 Group 中 Path 文件名
      */
     public static final String PATH_FILE_NAME = "FRouter$$Path$$";
+
+    /**
+     * 路由 Group 加载 方法名
+     */
+    public static final String GROUP_METHOD_NAME = "loadGroup";
+
+    /**
+     * 路由 Group 中 Group 参数名
+     */
+    public static final String GROUP_PARAMETER_NAME = "groupMap";
+
+    /**
+     * 路由 Group 中 Group 类文件名
+     */
+    public static final String GROUP_FILE_NAME = "FRouter$$Group$$";
 
 }
