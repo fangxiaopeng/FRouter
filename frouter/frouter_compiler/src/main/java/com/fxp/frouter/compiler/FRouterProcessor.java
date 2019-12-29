@@ -83,7 +83,7 @@ public class FRouterProcessor extends AbstractProcessor {
     private Elements elementsUtils;
 
     /**
-     * type (类信息)
+     * type (类信息)工具类，提供用来操作 TypeMirror 的方法
      */
     private Types typesUtils;
 
@@ -131,7 +131,7 @@ public class FRouterProcessor extends AbstractProcessor {
             moduleName = optionsMap.get(Constants.MODULE_NAME);
             pkgNameForAPT = optionsMap.get(Constants.APT_PACKAGE);
             // 不能用 Diagnostic.Kind.ERROR，会报错
-            messager.printMessage(Diagnostic.Kind.NOTE, "FRouter APT Parameters: \n moduleName : " + moduleName + "\n pkgNameForAPT : " + pkgNameForAPT);
+//            messager.printMessage(Diagnostic.Kind.NOTE, "FRouter APT Parameters: \n moduleName : " + moduleName + "\n pkgNameForAPT : " + pkgNameForAPT);
         }
     }
 
