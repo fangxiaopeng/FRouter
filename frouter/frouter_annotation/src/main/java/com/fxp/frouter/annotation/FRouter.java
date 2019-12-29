@@ -62,7 +62,15 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)   // 注解保留在class字节码中
 public @interface FRouter {
 
+    /**
+     * 必填
+     * @return
+     */
     String path();
 
+    /**
+     * 选填
+     * @return
+     */
     String group() default "";
 }
