@@ -23,9 +23,14 @@ package com.fxp.frouter.compiler.utils;
 public class Constants {
 
     /**
-     * 注解处理器支持的注解类型
+     * 注解处理器支持的注解类型 FRouter
      */
     public static final String FROUTER_ANNOTATION_TYPES = "com.fxp.frouter.annotation.FRouter";
+
+    /**
+     * 注解处理器支持的注解类型 Param
+     */
+    public static final String PARAMETER_ANNOTATION_TYPES = "com.fxp.frouter.annotation.Param";
 
     /**
      * module 名称
@@ -63,6 +68,11 @@ public class Constants {
     public static final String FROUTER_PATH = MODULE_API_PACKAGE + ".core.FRouterLoadPath";
 
     /**
+     * Param 注解 获取被注解参数
+     */
+    public static final String PARAM_LOAD = MODULE_API_PACKAGE + ".core.ParameterLoad";
+
+    /**
      * 路由 Group 中 Path 加载 方法名
      */
     public static final String PATH_METHOD_NAME = "loadPath";
@@ -91,5 +101,21 @@ public class Constants {
      * 路由 Group 中 Group 类文件名
      */
     public static final String GROUP_FILE_NAME = "FRouter$$Group$$";
+
+    /**
+     * Param 注解 加载方法名
+     */
+    public static final String PARAM_METHOD_NAME = "loadParam";
+
+    /**
+     * Param 注解 类文件名
+     */
+    public static final String PARAM_FILE_NAME = "$$Param";
+
+    /**
+     * Param 注解 获取参数
+     */
+    public static final String PARAM_NAME = "target";
+
 
 }
