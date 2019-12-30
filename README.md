@@ -1,2 +1,3 @@
 # FRouter
-路由框架
+  
+  组件化路由框架(Gradle + APT + JavaPoet)
